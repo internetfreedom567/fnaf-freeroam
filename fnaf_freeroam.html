@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>FNaF: FREE ROAM — نسخه مدل واقعی</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;user-select:none;-webkit-user-select:none}
+body{background:#000;overflow:hidden;font-family:'Segoe UI',Tahoma,sans-serif;color:#fff;width:100vw;height:100vh;position:fixed}
+#c{width:100%;height:100%;display:block}
+#hud{position:absolute;top:0;left:0;width:100%;padding:14px 18px;display:flex;justify-content:space-between;pointer-events:none;z-index:5;font-weight:bold;text-shadow:0 0 8px #000}
+.hb{background:rgba(15,8,8,.7);border:1px solid rgba(255,70,70,.4);border-radius:10px;padding:7px 14px;font-size:16px;backdrop-filter:blur(4px)}
+#bat-bar{height:7px;background:#1c1c1c;border-radius:4px;margin-top:5px;overflow:hidden;min-width:150px}
+#bat-f{height:100%;width:100%;background:#39ff88;border-radius:4px}
+#stam{position:absolute;bottom:22px;left:50%;transform:translateX(-50%);width:210px;background:rgba(15,8,8,.7);border:1px solid rgba(255,255,255,.25);border-radius:10px;padding:5px 12px;font-size:12.5px;display:none;z-index:5}
+#stam-b{height:6px;background:#1c1c1c;border-radius:3px;margin-top:3px;overflow:hidden}
+#stam-f{height:100%;width:100%;background:#ffd23f;border-radius:3px}
+#room-name{position:absolute;top:74px;right:20px;font-size:13px;color:#ffb0b0;background:rgba(15,8,8,.55);padding:5px 12px;border-radius:8px;display:none;z-index:5}
+#monitor{position:absolute;top:0;left:0;width:100%;height:100%;background:rgba(2,2,6,.94);display:none;z-index:12;padding:40px}
+#mon-inner{max-width:900px;margin:0 auto;height:100%;display:flex;flex-direction:column;gap:16px}
+#mon-map{flex:1;border:2px solid #444;border-radius:14px;position:relative;background:#0a0a12;overflow:hidden}
+.cam-dot{position:absolute;width:34px;height:34px;margin:-17px 0 0 -17px;border-radius:50%;border:2px dashed #ff3333;animation:blink 1s infinite}
+@keyframes blink{50%{opacity:.35}}
+.mon-room{position:absolute;border:1.5px solid #3a5f8a;color:#9fc5ff;font-size:12px;display:flex;align-items:center;justify-content:center;background:rgba(30,60,110,.25);border-radius:6px}
+.mon-cam{cursor:pointer;background:rgba(255,60,60,.15)}
+.mon-cam:hover,.mon-cam.act{background:rgba(255,60,60,.45);color:#fff}
+#mon-title{text-align:center;color:#7fd4ff;font-size:19px;letter-spacing:2px;text-shadow:0 0 10px #0af}
+#mon-foot{text-align:center;color:#888;font-size:13px}
+#ovl{position:absolute;top:0;left:0;width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.9);z-index:20}
+#panel{max-width:450px;width:92%;text-align:center;background:#130a0a;border:2px solid #a01010;border-radius:18px;padding:28px;box-shadow:0 0 40px rgba(200,0,0,.4)}
+#panel h1{color:#ff3b3b;font-size:24px;margin-bottom:12px;text-shadow:0 0 12px #f00}
+#panel p{font-size:14px;line-height:1.95;color:#ddd;margin-bottom:16px}
+.btn{background:linear-gradient(45deg,#c00,#500);border:none;color:#fff;font-size:16px;font-weight:bold;padding:12px 40px;border-radius:26px;cursor:pointer;box-shadow:0 0 16px rgba(255,0,0,.5)}
+.btn:hover{transform:scale(1.05)}
+#load-txt{color:#7fd4ff;font-size:14px;margin-bottom:10px}
+#js{position:absolute;top:0;left:0;width:100%;height:100%;z-index:30;display:none;background:#300;overflow:hidden}
+#js canvas{width:100%;height:100%}
+@keyframes shake{0%{transform:translate(10px,-8px)}25%{transform:translate(-9px,7px)}50%{transform:translate(8px,9px)}75%{transform:translate(-10px,-6px)}100%{transform:translate(7px,8px)}}
+.shaking{animation:shake .07s infinite}
+#hint-flash{position:absolute;bottom:64px;left:50%;transform:translateX(-50%);font-size:13px;color:#ffe08a;display:none;z-index:5;text-shadow:0 0 6px #000}
+</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="hud">
+<div class="hb">🌙 <span id="clock">۱۲:۰۰</span> · <span id="night-n">شب ۱</span></div>
+<div class="hb">🔦 باتری<div id="bat-bar"><div id="bat-f"></div></div></div>
+</div>
+<div id="stam">انرژی دویدن<div id="stam-b"><div id="stam-f"></div></div></div>
+<div id="room-name"></div>
+<div id="hint-flash">💡 چراغ‌قوه روشن — نور مستقیم انیماترونیک رو می‌ترسونه ولی باتری می‌سوزونه</div>
+<div id="monitor"><div id="mon-inner">
+<div id="mon-title">📹 دوربین‌های مداربسته — FREDDY FAZBEAR'S PIZZA</div>
+<div id="mon-map"></div>
+<div id="mon-foot">کلیک روی اتاق = سوییچ دوربین · <b>Tab / C</b> برای بستن</div>
+</div></div>
+<div id="ovl"><div id="panel">
+<h1 id="p-title">🐻 FNaF: FREE ROAM</h1>
+<p id="load-txt">در حال دانلود مدل‌های سه‌بعدی...</p>
+<p id="p-desc" style="display:none"><b>WASD</b> حرکت · <b>ماوس</b> نگاه · <b>Shift</b> دویدن<br>
+<b>کلیک چپ / F</b>: چراغ‌قوه 🔦 · <b>Tab یا C</b>: مانیتور دوربین‌ها 📹<br><br>
+انیماترونیک‌ها بین اتاق‌ها جابه‌جا می‌شن (سیستم AI شانس‌محور مثل فناف اصلی).<br>
+تا <b>۶ صبح</b> زنده بمون! اگه تو تاریکی بهت نزدیک بشن... 💀</p>
+<button class="btn" id="play" style="display:none">شروع شب</button>
+</div></div>
+<div id="js"></div>
+<script>
+'use strict';
+/* ============================================================
+   FNaF FREE ROAM — real GLB animatronics, waypoint AI,
+   flashlight repel, camera monitor. Single-file build.
+   Models loaded from GitHub raw (verified glTF-binary).
+   ============================================================ */
+const MODEL_BASE='https://raw.githubusercontent.com/internetfreedom567/hermesbackup2/main/models/';
+const MODELS={freddy:'fox.glb',bonnie:'robot.glb',chica:'brainstem.glb',foxy:'cesiumman.glb'};
+/* ---------- صدا (WebAudio) ---------- */
+const AC=new (window.AudioContext||window.webkitAudioContext)();
+function beep(f,d,t,v){const o=AC.createOscillator(),g=AC.createGain();o.type=t||'sine';o.frequency.value=f;g.gain.value=v||.3;o.connect(g);g.connect(AC.destination);g.gain.exponentialRampToValueAtTime(.001,AC.currentTime+d);o.start();o.stop(AC.currentTime+d);}
+const sfx={
+ step(){beep(65+Math.random()*25,.07,'triangle',.1)},
+ flashOn(){beep(950,.06,'square',.14)},
+ flashOff(){beep(480,.06,'square',.12)},
+ move(){beep(95+Math.random()*70,.3,'sawtooth',.06)},
+ camOpen(){beep(1200,.05,'square',.1);setTimeout(()=>beep(800,.05,'square',.08),60)},
+ static(){for(let i=0;i<3;i++)setTimeout(()=>beep(3000+Math.random()*2000,.04,'square',.03),i*50)},
+ scare(){const n=AC.currentTime,o=AC.createOscillator(),g=AC.createGain();o.type='sawtooth';o.frequency.setValueAtTime(750,n);o.frequency.exponentialRampToValueAtTime(55,n+.85);g.gain.setValueAtTime(.9,n);g.gain.exponentialRampToValueAtTime(.001,n+.9);o.connect(g);g.connect(AC.destination);o.start(n);o.stop(n+.9);beep(85,.9,'square',.5)},
+ win(){[523,659,784,1047].forEach((f,i)=>setTimeout(()=>beep(f,.35,'sine',.28),i*170))}
+};
+
+/* ---------- رندرر / صحنه / دوربین ---------- */
+const canvas=document.getElementById('c');
+const renderer=new THREE.WebGLRenderer({canvas,antialias:true});
+renderer.setSize(innerWidth,innerHeight);
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.shadowMap.enabled=true;
+renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+const scene=new THREE.Scene();
+scene.background=new THREE.Color(0x030307);
+scene.fog=new THREE.FogExp2(0x030307,.055);
+const camera=new THREE.PerspectiveCamera(74,innerWidth/innerHeight,.08,150);
+camera.rotation.order='YXZ';
+scene.add(new THREE.AmbientLight(0x232336,.75));
+const moon=new THREE.DirectionalLight(0x445577,.3);moon.position.set(8,20,6);scene.add(moon);
+
+/* ---------- نقشه: دیوارها به‌صورت AABB [minX,maxX,minZ,maxZ] ---------- */
+// چیدمان: سالن اصلی بزرگ + صحنه، آشپزخانه شرقی-شمالی، انبار شرقی-جنوبی، دفتر نگهبانی جنوب
+const WALLS=[];
+function wall(cx,cz,w,d,h){WALLS.push([cx-w/2,cx+w/2,cz-d/2,cz+d/2]);
+ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),new THREE.MeshStandardMaterial({color:0x40302c,roughness:.95}));
+ m.position.set(cx,h/2,cz);scene.add(m);return m;}
+(function buildMap(){
+ const H=4.6;
+ const floor=new THREE.Mesh(new THREE.PlaneGeometry(48,44),new THREE.MeshStandardMaterial({color:0x27201a,roughness:.92}));
+ floor.rotation.x=-Math.PI/2;floor.receiveShadow=true;scene.add(floor);
+ const ceil=new THREE.Mesh(new THREE.PlaneGeometry(48,44),new THREE.MeshStandardMaterial({color:0x181310}));ceil.rotation.x=Math.PI/2;ceil.position.y=H;scene.add(ceil);
+ // محیط بیرونی
+ wall(0,-22,48,.5,H);wall(0,22,48,.5,H);wall(-24,0,.5,44,H);wall(24,0,.5,44,H);
+ // صحنه (Show Stage) شمال‌غرب
+ wall(-14,-16,16,.4,3.2);
+ // آشپزخانه (شرق شمال) — دیوار با دروازه جنوبی
+ wall(12,-13,18,.4,H);           // شمال آشپزخانه = همون دیوار بیرونی نیست؛ داخلی
+ WALLS.pop();scene.children.pop(); // حذف؛ به‌جاش دیوار درست:
+ // (ساده‌سازی: آشپزخانه و انبار را با سه دیوار می‌سازیم و ورودی باز)
+ function room3(x,z,w,d){ // شمال+غرب+شرق، جنوب باز
+  wall(x,z-d/2,w,.4,H);wall(x-w/2,z,.4,d,H);wall(x+w/2,z,.4,d,H);}
+ room3(15,-15,16,10);  // آشپزخانه
+ room3(15,13,16,12);   // انبار
+ // دفتر نگهبانی جنوب‌غربی: سه دیوار + ورودی
+ wall(-16,17,12,.4,H);wall(-22,12,.4,11,H);wall(-10,15,.4,7,H);
+ // ستون‌های سالن
+ for(let i=-1;i<=1;i++)wall(i*8-2,2,.6,.6,H);
+ for(let i=0;i<4;i++){ // میزهای پیتزا
+  const tx=-19+i*7,tz=-4+(i%2)*6;
+  const top=new THREE.Mesh(new THREE.CylinderGeometry(1.1,1.1,.12,14),new THREE.MeshStandardMaterial({color:0x7a5a34}));
+  top.position.set(tx,.95,tz);top.castShadow=true;scene.add(top);
+  const leg=new THREE.Mesh(new THREE.CylinderGeometry(.09,.09,.95,8),new THREE.MeshStandardMaterial({color:0x333}));
+  leg.position.set(tx,.47,tz);scene.add(leg);}
+ // نورهای قرمز اضطراری
+ [[-14,-14],[15,-15],[15,13],[-16,14],[0,-8]].forEach(p=>{const l=new THREE.PointLight(0xff2020,.5,13);l.position.set(p[0],3.6,p[1]);scene.add(l);});
+})();
+function collides(x,z,r){r=r||.38;for(const w of WALLS){if(x>w[0]-r&&x<w[1]+r&&z>w[2]-r&&z<w[3]+r)return true;}return false;}
+
+/* ---------- اتاق‌ها + نقاط گشت‌زنی AI ---------- */
+const ROOMS=[
+ {id:'stage',   name:'صحنه نمایش',    rect:[-23,-5,-21,-11], spots:[[-19,-14],[-10,-14]]},
+ {id:'dining',  name:'سالن غذاخوری',  rect:[-23,6,-11,6],    spots:[[-18,-6],[-6,-6],[-18,4],[-6,4],[0,-2]]},
+ {id:'kitchen', name:'آشپزخانه',      rect:[7,23,-20,-10],   spots:[[11,-17],[19,-17],[11,-12],[19,-12]]},
+ {id:'storage', name:'انبار',         rect:[7,23,7,19],      spots:[[11,9],[19,9],[11,17],[19,17]]},
+ {id:'office',  name:'دفتر نگهبانی',  rect:[-23,-4,10,21],   spots:[[-19,13],[-13,13]]},
+ {id:'west',    name:'راهرو غربی',    rect:[-23,-12,-11,10], spots:[[-20,-9],[-20,0],[-20,8]]},
+ {id:'east',    name:'راهرو شرقی',    rect:[3,7,-8,6],       spots:[[4,-6],[4,2]]}
+];
+function roomAt(x,z){for(const r of ROOMS){if(x>=r.rect[0]&&x<=r.rect[1]&&z>=r.rect[2]&&z<=r.rect[3])return r;}return null;}
+
+/* ---------- بازیکن FPS ---------- */
+const player={x:-20,z:18,ry:Math.PI,rx:0,baseSpeed:4.6,stamina:100};
+const keys={};
+let state='LOADING',night=1,battery=100,flashOn=false,nightTime=0;
+addEventListener('keydown',e=>{keys[e.code]=true;
+ if(['Space','Tab','KeyW','KeyA','KeyS','KeyD'].includes(e.code))e.preventDefault();
+ if(state!=='PLAYING')return;
+ if(e.code==='KeyF')toggleFlash();
+ if(e.code==='Tab'||e.code==='KeyC')toggleMonitor();
+});
+addEventListener('keyup',e=>keys[e.code]=false);
+document.addEventListener('mousemove',e=>{
+ if(document.pointerLockElement!==canvas)return;
+ player.ry-=e.movementX*.0023;
+ player.rx=Math.max(-1.35,Math.min(1.35,player.rx-e.movementY*.0023));
+});
+canvas.addEventListener('click',()=>{if(state==='PLAYING'&&document.pointerLockElement!==canvas)canvas.requestPointerLock();else if(state==='PLAYING')toggleFlash();});
+
+/* ---------- چراغ‌قوه ---------- */
+const flash=new THREE.SpotLight(0xfff1c8,0,24,.5,.55,1.4);
+const flashTarget=new THREE.Object3D();
+camera.add(flash);camera.add(flashTarget);
+flash.position.set(.12,-.12,.05);flashTarget.position.set(0,-.04,-8);flash.target=flashTarget;scene.add(camera);
+function toggleFlash(){if(battery<=0){sfx.flashOff();return;}flashOn=!flashOn;flashOn?sfx.flashOn():sfx.flashOff();
+ document.getElementById('hint-flash').style.display=flashOn?'block':'none';}
+
+/* ---------- مانیتور دوربین‌ها (2D) ---------- */
+const monEl=document.getElementById('monitor'),monMap=document.getElementById('mon-map');
+let monitorOpen=false;
+function buildMonitor(){
+ monMap.innerHTML='';
+ const sx=x=>((x+26)/52)*100,sz=z=>((z+23)/46)*100;
+ ROOMS.forEach(r=>{
+  const d=document.createElement('div');d.className='mon-room mon-cam';
+  const[x0,x1,z0,z1]=r.rect;
+  d.style.left=sx(Math.min(x0,x1))+'%';d.style.top=sz(Math.min(z0,z1))+'%';
+  d.style.width=Math.abs(sx(x1)-sx(x0))+'%';d.style.height=Math.abs(sz(z1)-sz(z0))+'%';
+  d.textContent=r.name;d.dataset.room=r.id;
+  d.onclick=()=>{sfx.static();document.querySelectorAll('.mon-cam').forEach(e=>e.classList.remove('act'));d.classList.add('act');};
+  monMap.appendChild(d);});
+}
+function toggleMonitor(){monitorOpen=!monitorOpen;monEl.style.display=monitorOpen?'block':'none';
+ sfx.camOpen();if(monitorOpen)sfx.static();}
+function updateMonitor(){
+ document.querySelectorAll('.cam-dot').forEach(d=>d.remove());
+ animatronics.forEach(a=>{
+  const d=document.createElement('div');d.className='cam-dot';
+  d.style.left=((a.mesh.position.x+26)/52)*100+'%';
+  d.style.top=((a.mesh.position.z+23)/46)*100+'%';
+  d.style.borderColor='#'+a.eyeColor.toString(16).padStart(6,'0');
+  d.title=a.name;monMap.appendChild(d);});}
+
+/* ---------- دانلود مدل‌ها و ساخت انیماترونیک‌ها ---------- */
+const loader=new THREE.GLTFLoader();
+const animatronics=[];
+const DEFS=[
+ {key:'freddy',file:'fox.glb',     name:'Freddy',ai:2,eye:0x00ffff,scale:.9, glow:0xff3300},
+ {key:'bonnie',file:'robot.glb',   name:'Bonnie',ai:3,eye:0xff2222,scale:1.6,glow:0xff00ff},
+ {key:'chica', file:'brainstem.glb',name:'Chica',ai:2,eye:0xffcc00,scale:.55,glow:0xffff00},
+ {key:'foxy',  file:'cesiumman.glb',name:'Foxy', ai:4,eye:0x33ff66,scale:1.05,glow:0x00ff44}
+];
+function tintModel(root,color){root.traverse(o=>{if(o.isMesh&&o.material){
+ o.material=o.material.clone();o.material.color=new THREE.Color(color);
+ o.material.emissive=new THREE.Color(color).multiplyScalar(.22);}});}
+function addEyeGlow(model,hex){
+ const l=new THREE.PointLight(hex,1.15,6);l.position.set(0,1.65,.35);model.add(l);
+ const g=new THREE.Mesh(new THREE.SphereGeometry(.06,8,8),new THREE.MeshBasicMaterial({color:hex}));
+ g.position.set(-.14,1.62,.32);model.add(g);
+ const g2=g.clone();g2.position.x=.14;model.add(g2);}
+function loadAnims(defs,i){
+ if(i>=defs.length){onAllLoaded();return;}
+ const d=defs[i];
+ loader.load(MODEL_BASE+d.file,gltf=>{
+  const model=gltf.scene;
+  tintModel(model,d.glow);
+  model.scale.setScalar(d.scale||1);
+  // اصلاح ارتفاع: پایین مدل روی زمین
+  const box=new THREE.Box3().setFromObject(model);
+  model.position.y=-box.min.y;
+  addEyeGlow(model,d.eye);
+  const wrap=new THREE.Group();wrap.add(model);
+  const spot=ROOMS[0].spots[0];wrap.position.set(spot[0],0,spot[1]);
+  scene.add(wrap);
+  let mixer=null,walk=null,idle=null,run=null;
+  if(gltf.animations&&gltf.animations.length){
+   mixer=new THREE.AnimationMixer(model);
+   gltf.animations.forEach(a=>{
+    const n=(a.name||'').toLowerCase();
+    if(n.includes('walk'))walk=mixer.clipAction(a);
+    else if(n.includes('run'))run=mixer.clipAction(a);
+    else idle=idle||mixer.clipAction(a);});
+   (idle||walk).play();
+  }
+  animatronics.push({def:d,mesh:wrap,model,mixer,acts:{idle,walk,run},cur:null,
+   ai:d.ai,timer:5+Math.random()*4,state:'wander'});
+  loadAnims(defs,i+1);
+ },undefined,err=>{console.warn('model fail',d.file,err);loadAnims(defs,i+1);});
+}
+function setAnim(a,name){
+ if(!a.mixer)return;
+ const want=name==='chase'?a.acts.run:(name==='move'?a.acts.walk:a.acts.idle);
+ if(want&&a.cur!==want){Object.values(a.acts).forEach(x=>x&&x.stop());want.play();a.cur=want;}
+}
+
+/* ---------- HUD ---------- */
+const clockEl=document.getElementById('clock'),batF=document.getElementById('bat-f');
+const stamEl=document.getElementById('stam'),stamF=document.getElementById('stam-f');
+const roomEl=document.getElementById('room-name');
+const FA='۰۱۲۳۴۵۶۷۸۹';
+const toFa=n=>String(n).split('').map(c=>FA[+c]).join('');
+function updateClock(){
+ const totalMin=nightTime/60; // 6 ساعت بازی = هر ساعت ۶۰ ثانیه
+ const h24=(12+totalMin)%24,h12=h24%12||12,m=Math.floor((totalMin%1)*60);
+ const mm=(m<10?'0'+m:''+m);
+ clockEl.textContent=toFa(h12)+':'+toFa(mm);
+}
+/* ---------- AI انیماترونیک‌ها (سیستم شانس فناف) ---------- */
+function aiLevelNow(base){return base+night-1+Math.floor(nightTime/60);} // هر ساعت +۱
+function pickRoom(a){
+ // مسیر معقول: به اتاق مجاور نزدیک‌تر به بازیکن می‌رود (با احتمال) یا رندوم
+ const cur=roomAt(a.mesh.position.x,a.mesh.position.z)||ROOMS[1];
+ const others=ROOMS.filter(r=>r.id!==cur.id);
+ if(Math.random()<.45){ // تعقیب هوشمند
+  others.sort((r1,r2)=>distRoom(r1)-distRoom(r2));
+  return others[Math.floor(Math.random()*2)];
+ }
+ return others[Math.floor(Math.random()*others.length)];
+ function distRoom(r){const s=r.spots[0];return Math.hypot(s[0]-player.x,s[1]-player.z);}
+}
+function teleportAnimatronic(a){
+ const r=pickRoom(a);
+ const s=r.spots[Math.floor(Math.random()*r.spots.length)];
+ a.mesh.position.set(s[0],0,s[1]);
+ sfx.move();
+}
+function updateAI(dt){
+ animatronics.forEach(a=>{
+  if(a.mixer)a.mixer.update(dt);
+  const dx=player.x-a.mesh.position.x,dz=player.z-a.mesh.position.z;
+  const dist=Math.hypot(dx,dz);
+  // جهت مدل به سمت بازیکن
+  a.mesh.rotation.y=Math.atan2(dx,dz);
+
+  // تایپ حرکات شانسی
+  a.timer-=dt;
+  if(a.timer<=0){
+   const lvl=aiLevelNow(a.ai);
+   a.timer=Math.max(3,8-a.ai*.7);
+   if(Math.random()*20<lvl){teleportAnimatronic(a);setAnim(a,'move');}
+  }
+
+  // حالت‌ها: در نور مستقیم نزدیک => ترس؛ در تاریکی نزدیک => تعقیب
+  let repelled=false;
+  if(flashOn&&dist<11){
+   // آیا مدل داخل مخروط نور چراغ‌قوه است؟
+   const fwd=new THREE.Vector3();camera.getWorldDirection(fwd);
+   const to=new THREE.Vector3(a.mesh.position.x-player.x,0,a.mesh.position.z-player.z).normalize();
+   if(fwd.dot(to)>.86){repelled=true;}
+  }
+  if(repelled&&dist<9){
+   // عقب‌روی آهسته + انیمیشن idle
+   const back=2.6*dt;
+   const nx=a.mesh.position.x-to2().x*back,nz=a.mesh.position.z-to2().z*back;
+   if(!collides(nx,nz,.5)){a.mesh.position.x=nx;a.mesh.position.z=nz;}
+   setAnim(a,'idle');a.state='frozen';
+  } else if(dist<10&&!monitorOpen){
+   a.state='chase';
+   const sp=(1.5+a.ai*.35)*dt,L=dist||1;
+   const nx=a.mesh.position.x+dx/L*sp,nz=a.mesh.position.z+dz/L*sp;
+   if(!collides(nx,nz,.5)){a.mesh.position.x=nx;a.mesh.position.z=nz;}
+   setAnim(a,'chase');
+   if(dist<1.25)jumpscare(a);
+  } else {a.state='wander';setAnim(a,'idle');}
+
+  function to2(){const L=dist||1;return{x:dx/L,z:dz/L};}
+ });
+}
+/* ---------- جامپ‌اسکر (مدل واقعی جلوی دوربین) ---------- */
+const jsEl=document.getElementById('js');
+let scareAnim=null;
+function jumpscare(a){
+ if(state!=='PLAYING')return;
+ state='SCARED';sfx.scare();
+ document.exitPointerLock();
+ // افکت: تمام‌صفحه قرمز + لرزش + مدل جلوی بازیکن
+ jsEl.style.display='block';jsEl.className='shaking';jsEl.style.background='radial-gradient(circle,#4d0000,#000)';
+ a.mesh.position.set(player.x-Math.sin(player.ry)*1.2,0,player.z-Math.cos(player.ry)*1.2);
+ setTimeout(()=>{
+  jsEl.style.display='none';jsEl.className='';
+  document.getElementById('p-title').textContent='💀 '+a.def.name+' گرت!';
+  document.getElementById('p-desc').innerHTML='دوباره تلاش کن! به یاد داشته باش:<br>🔦 نور مستقیم = عقب‌نشینی · 📹 مانیتور = تعقیب متوقف<br>زمان دوام: <b>'+clockEl.textContent+'</b>';
+  document.getElementById('play').textContent='شروع مجدد';
+  document.getElementById('ovl').style.display='flex';
+ },1500);
+}
+function winGame(){
+ state='WON';sfx.win();document.exitPointerLock();
+ document.getElementById('p-title').textContent='🌅 ساعت ۶ صبح شد!';
+ document.getElementById('p-desc').innerHTML='<b style="color:#ffd23f">شب '+toFa(night)+' رو زنده سربلند تموم کردی!</b><br>انیماترونیک‌ها به صحنه برگشتن... فعلاً.';
+ document.getElementById('play').textContent='شب بعد (سخت‌تر)';
+ document.getElementById('ovl').style.display='flex';
+}
+
+/* ---------- حرکت بازیکن ---------- */
+let stepT=0;
+function updatePlayer(dt){
+ const mv=keys['KeyW']||keys['KeyA']||keys['KeyS']||keys['KeyD'];
+ const run=(keys['ShiftLeft']||keys['ShiftRight'])&&player.stamina>1&&mv;
+ const sp=player.baseSpeed*(run?1.8:1);
+ if(run)player.stamina=Math.max(0,player.stamina-26*dt);
+ else player.stamina=Math.min(100,player.stamina+15*dt);
+ stamF.style.width=player.stamina+'%';stamEl.style.display='block';
+ let dx=0,dz=0;
+ if(keys['KeyW']){dx-=Math.sin(player.ry);dz-=Math.cos(player.ry);}
+ if(keys['KeyS']){dx+=Math.sin(player.ry);dz+=Math.cos(player.ry);}
+ if(keys['KeyA']){dx-=Math.cos(player.ry);dz+=Math.sin(player.ry);}
+ if(keys['KeyD']){dx+=Math.cos(player.ry);dz-=Math.sin(player.ry);}
+ const L=Math.hypot(dx,dz);
+ if(L>0){dx/=L;dz/=L;
+  const nx=player.x+dx*sp*dt,nz=player.z+dz*sp*dt;
+  if(!collides(nx,player.z))player.x=nx;
+  if(!collides(player.x,nz))player.z=nz;
+  stepT-=dt;if(stepT<=0){sfx.step();stepT=run?.3:.46;}
+ }
+ // سر بالا-پایین هنگام راه رفتن
+ camera.position.set(player.x,1.62+(mv?Math.sin(performance.now()*.012)*(run?.05:.03):0),player.z);
+ camera.rotation.y=player.ry;camera.rotation.x=player.rx;
+ // نام اتاق فعلی
+ const r=roomAt(player.x,player.z);
+ roomEl.style.display=r?'block':'none';
+ if(r)roomEl.textContent='📍 '+r.name;
+}
+
+/* ---------- حلقه اصلی ---------- */
+const clock3=new THREE.Clock();
+let monTick=0;
+function loop(){
+ requestAnimationFrame(loop);
+ const dt=Math.min(clock3.getDelta(),.05);
+ if(state==='PLAYING'){
+  nightTime+=dt;updateClock();
+  updatePlayer(dt);
+  updateAI(dt);
+  if(flashOn){battery-=dt*2.6;if(battery<=0){battery=0;flashOn=false;sfx.flashOff();document.getElementById('hint-flash').style.display='none';}}
+  batF.style.width=battery+'%';
+  batF.style.background=battery>45?'#39ff88':(battery>18?'#ffd23f':'#ff3333');
+  flash.intensity=flashOn?2.8:0;
+  if(monitorOpen){monTick-=dt;if(monTick<=0){updateMonitor();monTick=.5;}}
+  if(nightTime>=360)winGame();
+ } else {flash.intensity=0;}
+ renderer.render(scene,camera);
+}
+
+/* ---------- شروع/ری‌استارت و بارگذاری ---------- */
+const ovl=document.getElementById('ovl'),playBtn=document.getElementById('play');
+function startNight(){
+ state='PLAYING';ovl.style.display='none';
+ nightTime=0;battery=100;flashOn=true;monitorOpen=false;monEl.style.display='none';
+ player.x=-20;player.z=18;player.ry=Math.PI;player.rx=0;player.stamina=100;
+ animatronics.forEach(a=>{const s=ROOMS[Math.floor(Math.random()*3)].spots[0];
+  a.mesh.position.set(s[0],0,s[1]);a.timer=6+Math.random()*4;a.state='wander';
+  if(a.mixer){Object.values(a.acts).forEach(x=>x&&x.stop());(a.acts.idle||a.acts.walk).play();a.cur=null;}});
+ AC.resume();canvas.requestPointerLock();
+ document.getElementById('night-n').textContent='شب '+toFa(night);
+ document.getElementById('hint-flash').style.display='block';
+}
+playBtn.addEventListener('click',()=>startNight());
+function onAllLoaded(){
+ buildMonitor();
+ document.getElementById('load-txt').style.display='none';
+ document.getElementById('p-desc').style.display='block';
+ playBtn.style.display='inline-block';
+ state='MENU';
+ loop();
+}
+addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);});
+loadAnims(DEFS,0);
+
+</script>
+</body>
+</html>
