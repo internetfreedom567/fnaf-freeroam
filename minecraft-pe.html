@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
+<title>Minecraft PE Web — نسخه مرورگر</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent}
+html,body{width:100%;height:100%;overflow:hidden;background:#000;font-family:'Segoe UI',Tahoma,sans-serif}
+#c{display:block;width:100vw;height:100vh}
+#xh{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:#fff;font-size:22px;text-shadow:0 0 3px #000;pointer-events:none;z-index:4;font-family:monospace}
+#hud{position:absolute;top:10px;left:12px;color:#fff;font-size:13px;font-family:monospace;text-shadow:1px 1px 2px #000;z-index:4;pointer-events:none;line-height:1.6}
+#hotbar{position:absolute;bottom:14px;left:50%;transform:translateX(-50%);display:flex;gap:4px;z-index:5;padding:5px;background:rgba(0,0,0,.35);border-radius:8px}
+.slot{width:52px;height:52px;border:2.5px solid #777;border-radius:6px;background:#2228;display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative}
+.slot.sel{border-color:#fff;box-shadow:0 0 8px rgba(255,255,255,.7)}
+.slot canvas{width:40px;height:40px;image-rendering:pixelated}
+.slot span{position:absolute;top:-2px;left:2px;color:#eee;font-size:11px;font-family:monospace;text-shadow:1px 1px 1px #000}
+#ovl{position:absolute;inset:0;background:rgba(10,12,20,.92);display:flex;align-items:center;justify-content:center;z-index:20}
+#panel{max-width:430px;width:90%;text-align:center;background:#1c2431;border:2px solid #3fa63f;border-radius:16px;padding:26px 24px;box-shadow:0 0 34px rgba(60,220,80,.28)}
+#panel h1{color:#7ee87e;font-size:23px;margin-bottom:10px;text-shadow:0 0 10px #2a2}
+#panel p{font-size:13.5px;line-height:2;color:#cfd8dc;margin-bottom:16px}
+.btn{background:linear-gradient(45deg,#3fa63f,#207120);border:none;color:#fff;font-size:16px;font-weight:bold;padding:12px 42px;border-radius:24px;cursor:pointer;box-shadow:0 0 16px rgba(60,200,60,.45)}
+.btn:hover{transform:scale(1.04)}
+#load-txt{color:#9fc5ff;font-size:14px}
+/* کنترل لمسی */
+#touch{position:absolute;inset:0;display:none;z-index:6;pointer-events:none}
+.tbtn{position:absolute;width:62px;height:62px;border-radius:50%;background:rgba(255,255,255,.14);border:2px solid rgba(255,255,255,.4);color:#fff;font-size:24px;display:flex;align-items:center;justify-content:center;pointer-events:auto;touch-action:none}
+#t-jump{right:22px;bottom:96px}
+#t-break{right:104px;bottom:30px;font-size:17px}
+#t-place{right:22px;bottom:176px;font-size:17px}
+#t-fly{left:22px;bottom:96px;font-size:15px}
+#joy{position:absolute;left:36px;bottom:44px;width:130px;height:130px;border-radius:50%;background:rgba(255,255,255,.08);border:2px solid rgba(255,255,255,.3);pointer-events:auto;touch-action:none}
+#joy-k{position:absolute;width:56px;height:56px;border-radius:50%;background:rgba(255,255,255,.32);left:37px;top:37px}
+</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="xh">+</div>
+<div id="hud"></div>
+<div id="hotbar"></div>
+<div id="touch">
+<div class="tbtn" id="t-jump">⤒</div>
+<div class="tbtn" id="t-break">⛏</div>
+<div class="tbtn" id="t-place">▣</div>
+<div class="tbtn" id="t-fly">✈</div>
+<div id="joy"><div id="joy-k"></div></div>
+</div>
+<div id="ovl"><div id="panel">
+<h1>⛏ Minecraft PE Web</h1>
+<p id="load-txt">در حال ساخت دنیا...</p>
+<p id="help" style="display:none">
+<b>WASD</b> حرکت · <b>Space</b> پرش · <b>Shift</b> دویدن · <b>F</b> پرواز<br>
+<b>کلیک چپ</b> کندن · <b>کلیک راست</b> گذاشتن · <b>1-9 / اسکرول</b> انتخاب بلوک<br><br>
+دنیا با درخت و آب و غار تولید می‌شه؛ تغییرات ذخیره می‌مونه.</p>
+<button class="btn" id="play" style="display:none">ورود به دنیا</button>
+</div></div>
+<script>
+'use strict';
+/* Minecraft PE Web — single-file voxel engine
+   Procedural textures + chunked world + physics + raycast edit */
+/* ---------- ثابت‌ها ---------- */
+const CH=16, WCH=8, WH=48; // chunk 16x16، دنیا 8x8 چانک، ارتفاع 48
+const WX=CH*WCH, WZ=CH*WCH;
+const AIR=0,GRASS=1,DIRT=2,STONE=3,SAND=4,LOG=5,LEAF=6,PLANK=7,COBBLE=8,GLASS=9,WATER=10,BEDROCK=11;
+const BLOCKS={
+ [GRASS]:{name:'Grass',tiles:{top:0,side:1,bottom:2}},
+ [DIRT]:{name:'Dirt',tiles:{top:2,side:2,bottom:2}},
+ [STONE]:{name:'Stone',tiles:{top:3,side:3,bottom:3}},
+ [SAND]:{name:'Sand',tiles:{top:4,side:4,bottom:4}},
+ [LOG]:{name:'Oak Log',tiles:{top:5,side:6,bottom:5}},
+ [LEAF]:{name:'Leaves',tiles:{top:7,side:7,bottom:7},trans:true},
+ [PLANK]:{name:'Planks',tiles:{top:8,side:8,bottom:8}},
+ [COBBLE]:{name:'Cobblestone',tiles:{top:9,side:9,bottom:9}},
+ [GLASS]:{name:'Glass',tiles:{top:10,side:10,bottom:10},trans:true},
+ [WATER]:{name:'Water',tiles:{top:11,side:11,bottom:11},fluid:true},
+ [BEDROCK]:{name:'Bedrock',tiles:{top:12,side:12,bottom:12}}
+};
+const HOTBAR=[GRASS,DIRT,STONE,SAND,LOG,LEAF,PLANK,COBBLE,GLASS];
+
+/* ---------- بافت procedural (آتلاس 13 تایل) ---------- */
+function makeAtlas(){
+ const T=16,N=13,cv=document.createElement('canvas');
+ cv.width=T*N;cv.height=T;
+ const g=cv.getContext('2d');
+ const R=(seedStr)=>{let h=2166136261;for(const c of seedStr){h^=c.charCodeAt(0);h=Math.imul(h,16777619);}return()=>{h=Math.imul(h^(h>>>15),2246822507);h=Math.imul(h^(h>>>13),3266489909);h^=h>>>16;return (h>>>0)/4294967296;};};
+ function tile(i,base,fn){const rnd=R('t'+i);
+  for(let y=0;y<T;y++)for(let x=0;x<T;x++){
+   const v=rnd();
+   g.fillStyle=fn(x,y,v)||base;g.fillRect(i*T+x,y,1,1);}}
+ // 0 grass top
+ tile(0,'#5fae3f',(x,y,v)=>v>.82?'#71c24d':(v<.14?'#4c9634':null));
+ // 1 grass side
+ tile(1,'#7a5636',(x,y,v)=>y<4?(v>.5?'#5fae3f':'#4c9634'):(v>.86?'#8a6340':null));
+ // 2 dirt
+ tile(2,'#7a5636',(x,y,v)=>v>.88?'#8a6340':(v<.1?'#65452b':null));
+ // 3 stone
+ tile(3,'#8a8a8a',(x,y,v)=>v>.85?'#9a9a9a':(v<.12?'#767676':null));
+ // 4 sand
+ tile(4,'#dcd0a0',(x,y,v)=>v>.85?'#e8dcb0':(v<.1?'#cabf8e':null));
+ // 5 log top
+ tile(5,'#a08244',(x,y,v)=>{const d=Math.max(Math.abs(x-7.5),Math.abs(y-7.5));return (d>6.5)?'#6b5427':((Math.floor(d)%2)?'#8f7336':'#a5874a');});
+ // 6 log side
+ tile(6,'#6b5427',(x,y,v)=>(x%5===0||v<.08)?'#57431f':null);
+ // 7 leaves
+ tile(7,'#3a7d2c',(x,y,v)=>v>.78?'#4f9c3c':(v<.16?'#2c5f20':null));
+ // 8 planks
+ tile(8,'#a5824c',(x,y,v)=>(y%4===3)?'#7d6238':((x===7&&(y>>2)%2)||(x===3&&!(y>>2)%2)?'#8a6c3e':null));
+ // 9 cobble
+ tile(9,'#7d7d7d',(x,y,v)=>{const cx=(x>>2)*4,cy=(y>>2)*4;const edge=((x-cx)*(x-cx)+(y-cy)*(y-cy));return edge>9?'#5f5f5f':(v>.8?'#909090':null);});
+ // 10 glass
+ g.clearRect(10*T,0,T,T);tile(10,'rgba(0,0,0,0)',(x,y,v)=>((x===0||y===0||x===T-1||y===T-1)?'rgba(200,230,240,.75)':((x+y)%7===0?'rgba(220,245,255,.25)':null)));
+ // 11 water
+ tile(11,'#3060d0',(x,y,v)=>v>.8?'#3f74e2':null);
+ // 12 bedrock
+ tile(12,'#3c3c3c',(x,y,v)=>v>.55?'#555':(v<.25?'#282828':null));
+ const tex=new THREE.CanvasTexture(cv);
+ tex.magFilter=THREE.NearestFilter;tex.minFilter=THREE.NearestFilter;
+ return tex;
+}
+
+/* ---------- دنیا ---------- */
+const world=new Uint8Array(WX*WH*WZ);
+const idx=(x,y,z)=>((z*WH+y)*WX+x);
+function getB(x,y,z){
+ if(x<0||x>=WX||z<0||z>=WZ)return STONE;
+ if(y<0)return BEDROCK;if(y>=WH)return AIR;
+ return world[idx(x,y,z)];}
+function setB(x,y,z,v){
+ if(x<0||x>=WX||z<0||z>=WZ||y<0||y>=WH)return;
+ world[idx(x,y,z)]=v;}
+
+// نویز مقداری ساده
+function makeNoise(seed){
+ let s=seed>>>0;const rand=()=>{s=Math.imul(s^(s>>>15),2246822507);s=Math.imul(s^(s>>>13),3266489909);s^=s>>>16;return(s>>>0)/4294967296;};
+ const perm=[...Array(256)].map(()=>rand());
+ const n2=(x,z)=>{
+  const xi=Math.floor(x),zi=Math.floor(z),xf=x-xi,zf=z-zi;
+  const h=(a,b)=>perm[((a*73+b*151)&255)];
+  const u=xf*xf*(3-2*xf),v=zf*zf*(3-2*zf);
+  return h(xi,zi)*(1-u)*(1-v)+h(xi+1,zi)*u*(1-v)+h(xi,zi+1)*(1-u)*v+h(xi+1,zi+1)*u*v;};
+ return (x,z,f,o)=>n2(x*f+(o||0),z*f-(o||37));
+}
+const SEA=14;
+function genWorld(){
+ const n1=makeNoise(1337),n2=makeNoise(9001),n3=makeNoise(4242);
+ for(let x=0;x<WX;x++)for(let z=0;z<WZ;z++){
+  const cont=n1(x,z,.02)+n1(x,z,.05)*.5;
+  const hills=Math.pow(n2(x,z,.03),2)*14;
+  const h=Math.floor(SEA+cont*10+hills-6);
+  for(let y=0;y<=Math.max(h,SEA);y++){
+   if(y===0)setB(x,y,z,BEDROCK);
+   else if(y<h-3){setB(x,y,z,STONE);
+    if(n3(x+z,y*2,z-x)<.06&&y>4)setB(x,y,z,AIR);} // غارهای ساده
+   else if(y<h)setB(x,y,z,DIRT);
+   else if(y===h)setB(x,y,z,h<SEA+1?SAND:(h>SEA+9?STONE:GRASS));
+   else setB(x,y,z,WATER);}
+ }
+ // درخت‌ها
+ const nt=makeNoise(777);
+ for(let x=2;x<WX-2;x++)for(let z=2;z<WZ-2;z++){
+  let h=-1;for(let y=WH-1;y>=0;y--){if(getB(x,y,z)!==AIR&&getB(x,y,z)!==LEAF){h=y;break;}}
+  if(getB(x,h,z)===GRASS&&nt(x,z,.15)>.93&&h<WH-8){
+   const th=4+Math.floor(nt(z,x,.3)*2);
+   for(let i=1;i<=th;i++)setB(x,h+i,z,LOG);
+   for(let dx=-2;dx<=2;dx++)for(let dz=-2;dz<=2;dz++)for(let dy=th-2;dy<=th+1;dy++){
+    const d=Math.abs(dx)+Math.abs(dz)+Math.abs(dy-th);
+    if(d<=3&&getB(x+dx,h+dy,z+dz)===AIR)setB(x+dx,h+dy,z+dz,LEAF);}
+  }}
+}
+/* ---------- مشینگ چانک‌ها ---------- */
+const scene=new THREE.Scene();
+const camera=new THREE.PerspectiveCamera(75,innerWidth/innerHeight,.1,300);
+camera.rotation.order='YXZ';
+const canvas=document.getElementById('c');
+const renderer=new THREE.WebGLRenderer({canvas,antialias:false});
+renderer.setSize(innerWidth,innerHeight);
+renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));
+const atlas=makeAtlas();
+const matSolid=new THREE.MeshLambertMaterial({map:atlas,vertexColors:true});
+const matTrans=new THREE.MeshLambertMaterial({map:atlas,vertexColors:true,transparent:true,alphaTest:.15});
+const chunkMeshes={}; // "cx,cz" -> {solid,water}
+// نور: آفتاب متحرک + ambient
+scene.add(new THREE.AmbientLight(0xffffff,.55));
+const sun=new THREE.DirectionalLight(0xffffff,.9);
+sun.position.set(60,120,40);scene.add(sun);scene.add(sun.target);
+scene.fog=new THREE.Fog(0x9fc7ff,60,190);
+scene.background=new THREE.Color(0x9fc7ff);
+
+function isOpaque(b){return b!==AIR&&b!==WATER&&!(BLOCKS[b]&&BLOCKS[b].trans);}
+function faceVisible(nb,self){if(self===WATER)return nb===AIR;return !isOpaque(nb)&&nb!==self;}
+
+function buildChunk(cx,cz){
+ const key=cx+','+cz;
+ const old=chunkMeshes[key];
+ if(old){[old.solid,old.water].forEach(m=>{if(m){scene.remove(m);m.geometry.dispose();}});}
+ const pos=[],uv=[],col=[],wpos=[],wuv=[],wcol=[];
+ function quad(arrP,arrU,arrC,x,y,z,dx,dy,dz,tileIdx,shade,wx,wy,wz){
+  // چهار رأس یک وجه مربعی
+  const t=tileIdx/13,u=1/13;
+  const corners=FACE_CORNERS(dx,dy,dz);
+  for(const c of corners){
+   arrP.push(x+c[0],y+c[1],z+c[2]);
+   arrC.push(shade,shade,shade);
+   arrU.push(t+ (c[3]?u:.001), c[4]);
+  }
+ }
+ const FACE_CORNERS=(dx,dy,dz)=>{
+  if(dy>0)return[[0,1,1,0,0],[1,1,1,1,0],[1,1,0,1,1],[0,1,0,0,1]];
+  if(dy<0)return[[0,0,0,0,0],[1,0,0,1,0],[1,0,1,1,1],[0,0,1,0,1]];
+  if(dx>0)return[[1,0,1,0,0],[1,0,0,1,0],[1,1,0,1,1],[1,1,1,0,1]];
+  if(dx<0)return[[0,0,0,0,0],[0,0,1,1,0],[0,1,1,1,1],[0,1,0,0,1]];
+  if(dz>0)return[[0,0,1,0,0],[1,0,1,1,0],[1,1,1,1,1],[0,1,1,0,1]];
+  return[[1,0,0,0,0],[0,0,0,1,0],[0,1,0,1,1],[1,1,0,0,1]];
+ };
+ const x0=cx*CH,z0=cz*CH;
+ for(let lx=0;lx<CH;lx++)for(let lz=0;lz<CH;lz++){
+  const x=x0+lx,z=z0+lz;
+  for(let y=0;y<WH;y++){
+   const b=getB(x,y,z);if(b===AIR)continue;
+   const def=BLOCKS[b];
+   const water=b===WATER;
+   const P=water?wpos:pos,U=water?wuv:uv,C=water?wcol:col;
+   // 6 جهت
+   const dirs=[[0,1,0,'top'],[0,-1,0,'bottom'],[1,0,0,'side'],[-1,0,0,'side'],[0,0,1,'side'],[0,0,-1,'side']];
+   for(const[dx,dy,dz,tk]of dirs){
+    const nb=getB(x+dx,y+dy,z+dz);
+    if(!faceVisible(nb,b))continue;
+    let shade=dy>0?1:(dy<0?.6:(dx!==0?.78:.88));
+    if(water)shade=Math.min(1,shade+.08);
+    quad(P,U,C,lx,y,lz,dx,dy,dz,def.tiles[tk],shade,x,z);
+    // ایندکس‌ها به‌صورت strip اضافه می‌کنیم پایین
+   }
+  }
+ }
+ // ساخت BufferGeometry با ایندکس
+ function makeGeo(P,U,C){
+  const n=P.length/3;if(!n)return null;
+  const gidx=[];for(let i=0;i<n;i+=4){gidx.push(i,i+1,i+2,i,i+2,i+3);}
+  const g=new THREE.BufferGeometry();
+  g.setAttribute('position',new THREE.Float32BufferAttribute(P,3));
+  g.setAttribute('uv',new THREE.Float32BufferAttribute(U,2));
+  g.setAttribute('color',new THREE.Float32BufferAttribute(C,3));
+  g.setIndex(gidx);g.computeVertexNormals();
+  return g;}
+ const gs=makeGeo(pos,uv,col),gw=makeGeo(wpos,wuv,wcol);
+ const solidM=gs?new THREE.Mesh(gs,matSolid):null;
+ const waterM=gw?new THREE.Mesh(gw,new THREE.MeshLambertMaterial({map:atlas,transparent:true,opacity:.72,vertexColors:true})):null;
+ if(solidM){solidM.position.set(x0,0,z0);scene.add(solidM);}
+ if(waterM){waterM.position.set(x0,0,z0);scene.add(waterM);}
+ chunkMeshes[key]={solid:solidM,water:waterM};
+}
+const dirty=new Set();
+function markDirty(x,z){dirty.add(Math.floor(x/CH)+','+Math.floor(z/CH));}
+function rebuildDirty(){let n=0;for(const k of dirty){const[cx,cz]=k.split(',').map(Number);buildChunk(cx,cz);n++;}dirty.clear();return n;}
+/* ---------- بازیکن: فیزیک AABB ---------- */
+const P={x:WX/2+.5,y:WH-2,z:WZ/2+.5,vx:0,vy:0,vz:0,ry:Math.PI*.75,rx:-.2,
+ onGround:false,fly:false,sel:0,sprint:false};
+const EYE=1.62,HW=.3,PH=1.8; // نیم‌عرض و ارتفاع
+function solidAt(x,y,z){const b=getB(Math.floor(x),Math.floor(y),Math.floor(z));return b!==AIR&&b!==WATER;}
+function boxCollides(px,py,pz){
+ for(let x=Math.floor(px-HW);x<=Math.floor(px+HW);x++)
+ for(let y=Math.floor(py);y<=Math.floor(py+PH-.001);y++)
+ for(let z=Math.floor(pz-HW);z<=Math.floor(pz+HW);z++){
+  const b=getB(x,y,z);
+  if(b!==AIR&&b!==WATER)return true;}
+ return false;}
+const keys={};
+addEventListener('keydown',e=>{keys[e.code]=true;
+ if(['Space','Tab'].includes(e.code))e.preventDefault();
+ if(state==='PLAY'){
+  if(e.code==='KeyF'){P.fly=!P.fly;P.vy=0;}
+  const num=e.code.match(/^Digit([1-9])$/);if(num)selectSlot(+num[1]-1);}
+});
+addEventListener('keyup',e=>keys[e.code]=false);
+
+/* ---------- Raycast DDA ---------- */
+function raycast(maxD){
+ const dir=new THREE.Vector3();camera.getWorldDirection(dir);
+ let x=Math.floor(camera.position.x),y=Math.floor(camera.position.y),z=Math.floor(camera.position.z);
+ const stepX=dir.x>0?1:-1,stepY=dir.y>0?1:-1,stepZ=dir.z>0?1:-1;
+ const tDX=Math.abs(1/dir.x),tDY=Math.abs(1/dir.y),tDZ=Math.abs(1/dir.z);
+ let tMX=(dir.x>0?(x+1-camera.position.x):(camera.position.x-x))*tDX;
+ let tMY=(dir.y>0?(y+1-camera.position.y):(camera.position.y-y))*tDY;
+ let tMZ=(dir.z>0?(z+1-camera.position.z):(camera.position.z-z))*tDZ;
+ let face=[0,0,0],t=0;
+ while(t<=maxD){
+  const b=getB(x,y,z);
+  if(b!==AIR&&b!==WATER)return{x,y,z,b,face};
+  if(tMX<tMY&&tMX<tMZ){x+=stepX;t=tMX;tMX+=tDX;face=[-stepX,0,0];}
+  else if(tMY<tMZ){y+=stepY;t=tMY;tMY+=tDY;face=[0,-stepY,0];}
+  else{z+=stepZ;t=tMZ;tMZ+=tDZ;face=[0,0,-stepZ];}
+ }
+ return null;}
+
+function breakBlock(){
+ const hit=raycast(6);if(!hit||hit.b===BEDROCK)return;
+ setB(hit.x,hit.y,hit.z,AIR);
+ markDirty(hit.x,hit.z);
+ // چانک همسایه اگر لبه بود
+ if(hit.x%CH===0)markDirty(hit.x-1,hit.z);if((hit.x+1)%CH===0)markDirty(hit.x+1,hit.z);
+ if(hit.z%CH===0)markDirty(hit.x,hit.z-1);if((hit.z+1)%CH===0)markDirty(hit.x,hit.z+1);
+ rebuildDirty();saveWorld();
+}
+function placeBlock(){
+ const hit=raycast(6);if(!hit)return;
+ const nx=hit.x+hit.face[0],ny=hit.y+hit.face[1],nz=hit.z+hit.face[2];
+ if(nx<0||nx>=WX||nz<0||nz>=WZ||ny<0||ny>=WH)return;
+ if(getB(nx,ny,nz)!==AIR&&getB(nx,ny,nz)!==WATER)return;
+ // جلوی داخل بدن خودت نذار
+ if(Math.abs(nx+.5-P.x)<HW+.5&&Math.abs(nz+.5-P.z)<HW+.5&&ny>=Math.floor(P.y)&&ny<=Math.floor(P.y+PH))return;
+ setB(nx,ny,nz,HOTBAR[P.sel]);
+ markDirty(nx,nz);
+ if(nx%CH===0)markDirty(nx-1,nz);if((nx+1)%CH===0)markDirty(nx+1,nz);
+ if(nz%CH===0)markDirty(nx,nz-1);if((nz+1)%CH===0)markDirty(nx,nz+1);
+ rebuildDirty();saveWorld();
+}
+
+/* ---------- ذخیره تغییرات (diff) ---------- */
+function saveWorld(){
+ try{
+  // فقط بلوک‌های تغییر یافته: نگهداری hash ساده — برای سادگی کل ستون‌ها نه؛ diff map:
+  if(!saveWorld.map)saveWorld.map={};
+ }catch(e){}
+}
+// ذخیره واقعی: از روی رویدادها
+const edits=new Map();
+const _setB=setB;
+setB=function(x,y,z,v){
+ if(state==='PLAY'&&edits.get(idx(x,y,z))!==v){edits.set(idx(x,y,z),v);}
+ _setB(x,y,z,v);
+};
+function persistEdits(){
+ try{const arr=[];edits.forEach((v,k)=>arr.push(k,v));
+ localStorage.setItem('mcpe_edits',JSON.stringify(arr));}catch(e){}
+}
+function loadEdits(){
+ try{const s=localStorage.getItem('mcpe_edits');if(!s)return;
+ const arr=JSON.parse(s);for(let i=0;i<arr.length;i+=2)world[arr[i]]=arr[i+1];
+ edits=new Map(arr.length?arr.map((v,i)=>i%2?null:[arr[i-1],v]).filter(Boolean):[]);
+ }catch(e){}
+}
+/* ---------- UI: هات‌بار و HUD ---------- */
+const hotbarEl=document.getElementById('hotbar'),hudEl=document.getElementById('hud');
+const slotEls=[];
+function drawBlockIcon(cv2,blockId){
+ const g=cv2.getContext('2d');g.imageSmoothingEnabled=false;
+ const t=BLOCKS[blockId].tiles.side;
+ g.drawImage(atlas.image,t*16,0,16,16,0,0,40,40);
+ // نمای ایزوتوپیک ساده: بالا روشن‌تر
+ g.globalAlpha=.25;g.fillStyle='#fff';g.fillRect(0,0,40,14);g.globalAlpha=1;
+}
+function buildHotbar(){
+ HOTBAR.forEach((b,i)=>{
+  const d=document.createElement('div');d.className='slot'+(i===P.sel?' sel':'');
+  const cv2=document.createElement('canvas');cv2.width=40;cv2.height=40;
+  drawBlockIcon(cv2,b);
+  const num=document.createElement('span');num.textContent=i+1;
+  d.appendChild(cv2);d.appendChild(num);
+  d.addEventListener('click',()=>selectSlot(i));
+  hotbarEl.appendChild(d);slotEls.push(d);});
+}
+function selectSlot(i){P.sel=i;slotEls.forEach((s,j)=>s.classList.toggle('sel',j===i));}
+addEventListener('wheel',e=>{if(state!=='PLAY')return;selectSlot((P.sel+(e.deltaY>0?1:-1)+9)%9);},{passive:true});
+
+/* ---------- ورودی ماوس ---------- */
+let mouseDown=[false,false];
+canvas.addEventListener('contextmenu',e=>e.preventDefault());
+document.addEventListener('mousemove',e=>{
+ if(document.pointerLockElement!==canvas)return;
+ P.ry-=e.movementX*.0024;P.rx=Math.max(-1.55,Math.min(1.55,P.rx-e.movementY*.0024));});
+canvas.addEventListener('mousedown',e=>{
+ if(state!=='PLAY')return;
+ if(document.pointerLockElement!==canvas){canvas.requestPointerLock();return;}
+ if(e.button===0)breakBlock();
+ else if(e.button===2)placeBlock();
+});
+// نگه‌داشتن برای کندن پیوسته
+setInterval(()=>{if(state==='PLAY'&&mouseDown[0]&&document.pointerLockElement===canvas)breakBlock();},250);
+
+/* ---------- کنترل لمسی (PE-style) ---------- */
+const isTouch=('ontouchstart'in window)||navigator.maxTouchPoints>0;
+const joyEl=document.getElementById('joy'),joyK=document.getElementById('joy-k');
+let joyVec={x:0,y:0},joyId=null,lookId=null,lookLast=null;
+if(isTouch){
+ document.getElementById('touch').style.display='block';
+ joyEl.addEventListener('touchstart',e=>{joyId=e.changedTouches[0].identifier;},{passive:true});
+ addEventListener('touchmove',e=>{
+  for(const t of e.changedTouches){
+   if(t.identifier===joyId){
+    const r=joyEl.getBoundingClientRect();
+    let dx=(t.clientX-(r.left+65))/50,dy=(t.clientY-(r.top+65))/50;
+    const L=Math.hypot(dx,dy);if(L>1){dx/=L;dy/=L;}
+    joyVec={x:dx,y:dy};
+    joyK.style.left=(37+dx*38)+'px';joyK.style.top=(37+dy*38)+'px';
+   } else if(t.identifier===lookId&&lookLast){
+    P.ry-=(t.clientX-lookLast.x)*.006;
+    P.rx=Math.max(-1.5,Math.min(1.5,P.rx-(t.clientY-lookLast.y)*.006));
+    lookLast={x:t.clientX,y:t.clientY};
+   }}
+ },{passive:true});
+ addEventListener('touchstart',e=>{
+  for(const t of e.changedTouches){
+   if(t.identifier!==joyId&&t.target===canvas){lookId=t.identifier;lookLast={x:t.clientX,y:t.clientY};}}
+ },{passive:true});
+ addEventListener('touchend',e=>{
+  for(const t of e.changedTouches){
+   if(t.identifier===joyId){joyId=null;joyVec={x:0,y:0};joyK.style.left='37px';joyK.style.top='37px';}
+   if(t.identifier===lookId)lookId=null;}
+ },{passive:true});
+ const bind=(id,fn)=>document.getElementById(id).addEventListener('touchstart',e=>{e.preventDefault();fn();},{passive:false});
+ bind('t-jump',()=>keys['Space']=true);
+ bind('t-break',breakBlock);
+ bind('t-place',placeBlock);
+ bind('t-fly',()=>{P.fly=!P.fly;P.vy=0;});
+}
+/* ---------- حلقه اصلی: فیزیک + روز/شب ---------- */
+let state='BOOT',dayT=.28; // 0..1 چرخه روز
+const clockEl=new THREE.Clock();
+let fps=0,fpsC=0,fpsT=0;
+function physics(dt){
+ const inWater=getB(Math.floor(P.x),Math.floor(P.y+.4),Math.floor(P.z))===WATER;
+ const sp=(P.sprint||keys['ShiftLeft'])?8.2:(inWater?3.2:4.6);
+ let dx=0,dz=0;
+ if(keys['KeyW']){dx-=Math.sin(P.ry);dz-=Math.cos(P.ry);}
+ if(keys['KeyS']){dx+=Math.sin(P.ry);dz+=Math.cos(P.ry);}
+ if(keys['KeyA']){dx-=Math.cos(P.ry);dz+=Math.sin(P.ry);}
+ if(keys['KeyD']){dx+=Math.cos(P.ry);dz-=Math.sin(P.ry);}
+ // جوی‌استیک لمسی
+ if(joyVec.x||joyVec.y){dx+=joyVec.x*Math.cos(P.ry)-joyVec.y*Math.sin(P.ry);dz+=-joyVec.x*Math.sin(P.ry)-joyVec.y*Math.cos(P.ry);}
+ const L=Math.hypot(dx,dz);
+ if(L>0){dx/=L;dz/=L;}
+ const tx=dx*sp,tz=dz*sp;
+ P.vx+=(tx-P.vx)*Math.min(1,dt*12);
+ P.vz+=(tz-P.vz)*Math.min(1,dt*12);
+ if(P.fly){
+  P.vy=0;
+  if(keys['Space'])P.vy=7;
+  if(keys['ShiftLeft'])P.vy=-7;
+ } else {
+  P.vy-=(inWater?9:26)*dt;
+  if(inWater)P.vy=Math.max(P.vy,-3);
+  if(keys['Space']){
+   if(inWater)P.vy=Math.min(P.vy+30*dt,4);
+   else if(P.onGround)P.vy=8.6;
+  }
+ }
+ // حرکت محور‌به‌محور با برخورد
+ let nx=P.x+P.vx*dt;
+ if(!boxCollides(nx,P.y,P.z))P.x=nx;else P.vx=0;
+ let nz=P.z+P.vz*dt;
+ if(!boxCollides(P.x,P.y,nz))P.z=nz;else P.vz=0;
+ let ny=P.y+P.vy*dt;
+ if(!boxCollides(P.x,ny,P.z)){P.y=ny;P.onGround=false;}
+ else{
+  if(P.vy<0)P.onGround=true;
+  P.vy=0;}
+ if(P.y<-10){P.x=WX/2;P.y=WH;P.z=WZ/2;P.vy=0;} // سقوط از دنیا
+ camera.position.set(P.x,P.y+EYE,P.z);
+ camera.rotation.y=P.ry;camera.rotation.x=P.rx;
+}
+function dayCycle(dt){
+ dayT=(dayT+dt/240)%1; // شبانه‌روز ۴ دقیقه
+ const ang=dayT*Math.PI*2;
+ sun.position.set(Math.cos(ang)*100+80,Math.sin(ang)*120,40);
+ const dayAmt=Math.max(0,Math.min(1,Math.sin(ang)+.35));
+ const sky=new THREE.Color().setHSL(.6,.65,.25+.45*dayAmt);
+ scene.background.copy(sky);scene.fog.color.copy(sky);
+ sun.intensity=.15+.85*dayAmt;
+}
+let hudT=0;
+function updateHUD(dt){
+ hudT-=dt;if(hudT>0)return;hudT=.25;
+ hudEl.innerHTML='XYZ: '+P.x.toFixed(1)+' / '+P.y.toFixed(1)+' / '+P.z.toFixed(1)
+ +'<br>FPS: '+fps+(P.fly?'<br>✈ پرواز':'')
+ +'<br>⏰ '+(dayT*24).toFixed(0)+':00';
+}
+function loop(){
+ requestAnimationFrame(loop);
+ const dt=Math.min(clockEl.getDelta(),.05);
+ fpsC++;fpsT+=dt;if(fpsT>=.5){fps=Math.round(fpsC/fpsT);fpsC=0;fpsT=0;}
+ if(state==='PLAY'){physics(dt);dayCycle(dt);updateHUD(dt);}
+ renderer.render(scene,camera);
+}
+
+/* ---------- راه‌اندازی ---------- */
+const ovl=document.getElementById('ovl'),playBtn=document.getElementById('play');
+function boot(){
+ genWorld();
+ loadEdits();
+ // ساخت همه چانک‌ها
+ for(let cx=0;cx<WCH;cx++)for(let cz=0;cz<WCH;cz++)buildChunk(cx,cz);
+ buildHotbar();
+ // اسپاون روی سطح
+ let sy=WH-2;
+ for(let y=WH-1;y>0;y--){if(getB(WX/2,y,WZ/2)!==AIR&&getB(WX/2,y,WZ/2)!==WATER){sy=y+1;break;}}
+ P.y=sy+.5;
+ document.getElementById('load-txt').style.display='none';
+ document.getElementById('help').style.display='block';
+ playBtn.style.display='inline-block';
+ state='MENU';
+ loop();
+}
+playBtn.addEventListener('click',()=>{
+ state='PLAY';ovl.style.display='none';
+ if(!isTouch)canvas.requestPointerLock();
+});
+setInterval(persistEdits,5000);
+addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);});
+boot();
+</script>
+</body>
+</html>
