@@ -430,9 +430,9 @@ function physics(dt){
  if(keys['KeyD']){dx+=Math.cos(P.ry);dz-=Math.sin(P.ry);}
  // جوی‌استیک لمسی — بالا (y منفی) = جلو، راست (x مثبت) = راست
  if(joyVec.x||joyVec.y){
-  const f=-joyVec.y,s=-joyVec.x;
-  dx+=f*Math.sin(P.ry)+s*Math.cos(P.ry);
-  dz+=f*Math.cos(P.ry)-s*Math.sin(P.ry);
+  const f=-joyVec.y,s=joyVec.x;
+  dx+=-f*Math.sin(P.ry)+s*Math.cos(P.ry);
+  dz+=-f*Math.cos(P.ry)-s*Math.sin(P.ry);
  }
  const L=Math.hypot(dx,dz);
  if(L>0){dx/=L;dz/=L;}
